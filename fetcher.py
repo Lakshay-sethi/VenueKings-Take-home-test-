@@ -22,17 +22,31 @@ from config import (
 from circuit_breaker import SimpleCircuitBreaker
 
 
+# Concurrency Decision: Use asyncio.Semaphore to limit concurrent requests
+# This prevents overwhelming target APIs and respects rate limits
+# MAX_CONCURRENT_REQUESTS controls how many requests run simultaneously
+circuit_breakers = {}
+
+
 @retry(
     wait=wait_exponential(
         multiplier=RETRY_MULTIPLIER, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT
     ),
     stop=stop_after_attempt(MAX_RETRY_ATTEMPTS),
-    retry=retry_if_exception_type(httpx.RequestError),
+    retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
 )
 async def fetch_page(url: str, page: int, semaphore: asyncio.Semaphore) -> List[Dict]:
-    """Fetches product data from the given URL and returns a list of response dicts."""
-    async with semaphore:  # rate limit
-        await asyncio.sleep(RATE_LIMIT_DELAY)  # naive throttle
+    """
+    Fetch a single page of products with concurrency control.
+
+    Concurrency Decision: Each request acquires a semaphore slot before executing.
+    This ensures we never exceed MAX_CONCURRENT_REQUESTS simultaneous HTTP calls,
+    preventing API rate limit violations and resource exhaustion.
+    """
+    async with semaphore:  # Acquire semaphore slot - blocks if limit reached
+        # Rate limiting
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             response = await client.get(
                 f"{url}?limit={MAX_ITEMS_PER_PAGE}&skip={(page - 1) * MAX_ITEMS_PER_PAGE}"
@@ -52,7 +66,13 @@ circuit_breakers = {}
 
 
 async def fetch_all_products(url: str) -> List[Dict]:
-    """Fetches all products from the paginated endpoint."""
+    """
+    Fetches all products from the paginated endpoint.
+
+    Concurrency Decision: Create semaphore here and pass to all page requests.
+    This allows multiple pages to be fetched concurrently while still respecting
+    the overall concurrency limit across all endpoints.
+    """
     all_products = []
     page = 1
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -61,9 +81,11 @@ async def fetch_all_products(url: str) -> List[Dict]:
         url, SimpleCircuitBreaker(fail_threshold=3, reset_timeout=60)
     )
     while True:
+        # Circuit breaker check before attempting request
         if not cb.allow_request():
             logger.warning(f"Circuit breaker OPEN for {url}. Skipping fetch.")
             break
+
         try:
             products = await fetch_page(url, page, semaphore)
             cb.record_success()

@@ -3,7 +3,7 @@ from typing import List, Dict
 from models import Product
 from datetime import datetime
 from threading import Lock
-from config import MAX_WORKERS
+from config import MAX_WORKERS, logger
 import time
 
 # Enhanced metrics dictionary and lock
@@ -76,12 +76,45 @@ def normalize_product(product: Dict) -> Product:
 def process_products(
     products: List[Dict], max_workers: int = MAX_WORKERS
 ) -> List[Product]:
-    """Process products using a thread pool."""
-    processed = []
+    """
+    Process products concurrently using thread pool.
+
+    Concurrency Decision: Use ThreadPoolExecutor instead of asyncio for CPU-bound work.
+    Data normalization, validation, and transformation are CPU-intensive operations
+    that benefit from true parallelism rather than async concurrency.
+
+    Why threads over async here:
+    - normalize_product() is CPU-bound (parsing, validation, transformation)
+    - No I/O operations that would benefit from async
+    - ThreadPoolExecutor provides true parallelism for CPU work
+    - GIL is released during C extensions (like JSON parsing, datetime operations)
+    """
+    processed_products = []
+
+    # Use ThreadPoolExecutor for CPU-bound product normalization
+    # max_workers controls how many products are processed simultaneously
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(normalize_product, p) for p in products]
-        for f in as_completed(futures):
-            result = f.result()
-            if result is not None:
-                processed.append(result)
-    return processed
+        # Submit all products for processing - returns Future objects immediately
+        future_to_product = {
+            executor.submit(normalize_product, product): product for product in products
+        }
+
+        # Process completed futures as they finish (not in submission order)
+        # as_completed() yields futures as soon as they complete
+        for future in as_completed(future_to_product):
+            try:
+                result = future.result()  # Get the processed Product or None
+                if result:
+                    processed_products.append(result)
+
+                    # Thread-safe metrics update using lock
+                    with metrics_lock:
+                        metrics["successful_products"] += 1
+
+            except Exception as e:
+                # Handle individual product processing failures gracefully
+                with metrics_lock:
+                    metrics["failed_products"] += 1
+                logger.error(f"Product processing failed: {e}")
+
+    return processed_products

@@ -6,20 +6,30 @@ import time
 
 
 async def main():
-    urls = URLS
+    """
+    Main pipeline orchestrator.
 
-    # Monitoring variables
+    Concurrency Decision: Use asyncio for I/O-bound API fetching, then switch to
+    thread pools for CPU-bound processing. This hybrid approach maximizes efficiency:
+    - Async for network I/O (fetching from multiple APIs concurrently)
+    - Threads for CPU work (data processing and normalization)
+    """
+    urls = URLS
     fetch_success = 0
     fetch_fail = 0
     start_time = time.perf_counter()
     processed_products = []
+
+    # Concurrency Decision: Process URLs sequentially to control memory usage
     for url in urls:
         logger.info(f"Fetching products from {url}")
         try:
+            # Async I/O operation
             products = await fetch_all_products(url)
             fetch_success += 1
 
-            # Process in batches to avoid loading all into memory at once
+            # Process in batches to manage memory usage with large datasets
+            # Each batch uses ThreadPoolExecutor for CPU-bound processing
             for i in range(0, len(products), BATCH_SIZE):
                 batch = products[i : i + BATCH_SIZE]
                 batch_processed = process_products(batch)
@@ -63,4 +73,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Run the async main function
     asyncio.run(main())
