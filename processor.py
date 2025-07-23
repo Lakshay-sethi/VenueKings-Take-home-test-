@@ -1,8 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
-from models import Product, Summary
+from models import Product
 from datetime import datetime
-from collections import defaultdict
 from threading import Lock
 from config import MAX_WORKERS
 import time
