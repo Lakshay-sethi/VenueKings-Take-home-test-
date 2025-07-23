@@ -1,6 +1,5 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
 
 
 class Summary(BaseModel):
@@ -31,7 +30,7 @@ class Product(BaseModel):
         ..., ge=0.0, description="The price of the product in the specified currency."
     )
     category: str = Field(..., description="The category to which the product belongs.")
-    processed_at: datetime = Field(
+    processed_at: str = Field(
         ..., description="The timestamp indicating when the product was processed."
     )
 
@@ -39,9 +38,7 @@ class Product(BaseModel):
 class Error(BaseModel):
     endpoint: str = Field(..., description="The API endpoint where the error occurred.")
     error: str = Field(..., description="A description of the error encountered.")
-    timestamp: datetime = Field(
-        ..., description="The timestamp when the error occurred."
-    )
+    timestamp: str = Field(..., description="The timestamp when the error occurred.")
 
 
 class ResponseModel(BaseModel):
