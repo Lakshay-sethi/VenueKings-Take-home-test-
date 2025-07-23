@@ -32,12 +32,17 @@ async def fetch_page(
             )
             response.raise_for_status()  # Raise exception for HTTP errors
             data = response.json()
-            products_data = data.get("products", [])
-
+            if "products" in data:
+                products_data = data.get("products", [])
+            else:
+                products_data = data
             # Preprocess the data to handle id, source, and processed_at
             for product in products_data:
                 product["id"] = str(product.get("id", ""))
+                product["title"] = product.get("title", "Unknown")
                 product["source"] = url
+                product["price"] = float(product.get("price", 0.0))
+                product["category"] = product.get("category", "Unknown")
                 product["processed_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
             # Validate and parse the product data using the Product model
@@ -52,7 +57,7 @@ async def fetch_all_products(url: str) -> List[Product]:
     # Fetch products page by page
     while True:
         products = await fetch_page(url, page, semaphore)
-        if not products:
+        if not products or len(all_products) > 200:
             break  # Stop if no products are returned (end of pagination)
         all_products.extend(products)
         page += 1
@@ -61,13 +66,19 @@ async def fetch_all_products(url: str) -> List[Product]:
 
 
 async def main():
-    url = "https://dummyjson.com/products"
-    try:
-        products = await fetch_all_products(url)
-        for product in products:
-            print(product.model_dump())
-    except Exception as e:
-        print(f"Error fetching data: {e}")
+    urls = [
+        "https://dummyjson.com/products",
+        "https://jsonplaceholder.typicode.com/posts",
+        "https://world.openfoodfacts.org/cgi/search.pl?action=process&json=true",
+    ]
+    for url in urls:
+        print(f"Fetching products from {url}")
+        try:
+            products = await fetch_all_products(url)
+            for product in products:
+                print(product.model_dump())
+        except Exception as e:
+            print(f"Error fetching data: {e}")
 
 
 if __name__ == "__main__":
