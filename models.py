@@ -1,25 +1,5 @@
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel, Field
-
-
-class Summary(BaseModel):
-    total_products: int = Field(
-        ..., ge=0, description="The total number of products processed."
-    )
-    processing_time_seconds: float = Field(
-        ...,
-        ge=0.0,
-        description="The total time taken to process the products, in seconds.",
-    )
-    success_rate: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="The success rate of processing, represented as a value between 0 and 1.",
-    )
-    sources: List[str] = Field(
-        ..., description="A list of data sources used for processing. API links."
-    )
 
 
 class Product(BaseModel):
@@ -35,20 +15,14 @@ class Product(BaseModel):
     )
 
 
-class Error(BaseModel):
-    endpoint: str = Field(..., description="The API endpoint where the error occurred.")
-    error: str = Field(..., description="A description of the error encountered.")
-    timestamp: str = Field(..., description="The timestamp when the error occurred.")
-
-
-class ResponseModel(BaseModel):
-    summary: Summary = Field(
-        ...,
-        description="A summary of the processing results, including totals and success rate.",
-    )
-    products: List[Product] = Field(
-        ..., description="A list of products that were successfully processed."
-    )
-    errors: Optional[List[Error]] = Field(
-        None, description="A list of errors encountered during processing, if any."
-    )
+# class ResponseModel(BaseModel):
+#     summary: Summary = Field(
+#         ...,
+#         description="A summary of the processing results, including totals and success rate.",
+#     )
+#     products: List[Product] = Field(
+#         ..., description="A list of products that were successfully processed."
+#     )
+#     errors: Optional[List[Error]] = Field(
+#         None, description="A list of errors encountered during processing, if any."
+#     )
